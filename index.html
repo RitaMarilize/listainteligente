@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lista de Mercado Inteligente</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Lista de mercado</p>
+          <h1>Feira no limite certo</h1>
+        </div>
+        <div class="month-box">
+          <label for="shoppingMonth">Mes da compra</label>
+          <input id="shoppingMonth" type="month" />
+        </div>
+      </header>
+
+      <nav class="section-tabs" aria-label="Telas do app">
+        <button class="tab-button active" type="button" data-screen-target="summaryScreen" aria-selected="true">
+          <span class="tab-icon summary-icon" aria-hidden="true"></span>
+          Resumo
+        </button>
+        <button class="tab-button" type="button" data-screen-target="listScreen" aria-selected="false">
+          <span class="tab-icon list-icon" aria-hidden="true"></span>
+          Lista
+        </button>
+        <button class="tab-button" type="button" data-screen-target="productsScreen" aria-selected="false">
+          <span class="tab-icon product-icon" aria-hidden="true"></span>
+          Produtos
+        </button>
+        <button class="tab-button" type="button" data-screen-target="historyScreen" aria-selected="false">
+          <span class="tab-icon history-icon" aria-hidden="true"></span>
+          Historico
+        </button>
+      </nav>
+
+      <main class="screen-stack">
+        <section class="app-screen active" id="summaryScreen">
+          <section class="budget-band" aria-label="Resumo do orcamento">
+            <div class="budget-control">
+              <label for="budgetInput">Saldo disponivel</label>
+              <div class="money-field">
+                <span>R$</span>
+                <input id="budgetInput" type="number" min="0" step="0.01" inputmode="decimal" />
+              </div>
+            </div>
+
+            <div class="budget-summary">
+              <div class="summary-item">
+                <span>Total da lista</span>
+                <strong id="totalSpent">R$ 0,00</strong>
+              </div>
+              <div class="summary-item">
+                <span>Saldo restante</span>
+                <strong id="remainingBudget">R$ 0,00</strong>
+              </div>
+              <div class="summary-item">
+                <span>Itens</span>
+                <strong id="itemCount">0</strong>
+              </div>
+              <div class="summary-item status-item" id="budgetStatus">Dentro do saldo</div>
+            </div>
+
+            <div class="progress-track" aria-hidden="true">
+              <div class="progress-fill" id="budgetProgress"></div>
+            </div>
+          </section>
+
+          <section class="tool-panel summary-panel" aria-labelledby="summaryTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Resumo</p>
+                <h2 id="summaryTitle">Resumo do mes</h2>
+              </div>
+            </div>
+            <div class="insight-grid" id="summaryHighlights"></div>
+          </section>
+        </section>
+
+        <section class="app-screen" id="listScreen" hidden>
+          <section class="tool-panel list-panel" aria-labelledby="shoppingListTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Compra do mes</p>
+                <h2 id="shoppingListTitle">Minha lista</h2>
+              </div>
+              <button class="ghost-button compact" id="clearListButton" type="button">Limpar lista</button>
+            </div>
+
+            <form id="addToListForm" class="add-list-form">
+              <label>
+                Produto salvo
+                <select id="productSelect"></select>
+              </label>
+              <label>
+                Qtd.
+                <input id="itemQuantity" type="number" min="0.01" step="0.01" value="1" inputmode="decimal" />
+              </label>
+              <button class="primary-button icon-only" type="submit" aria-label="Adicionar na lista" title="Adicionar na lista">+</button>
+            </form>
+
+            <div class="empty-state" id="emptyListState" hidden>
+              Sua lista ainda esta vazia.
+            </div>
+
+            <div class="shopping-list" id="shoppingList"></div>
+          </section>
+        </section>
+
+        <section class="app-screen" id="productsScreen" hidden>
+          <div class="products-layout">
+            <section class="tool-panel product-panel" aria-labelledby="productFormTitle">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Cadastro</p>
+                  <h2 id="productFormTitle">Produto e preco</h2>
+                </div>
+                <button class="ghost-button compact" id="cancelEditButton" type="button" hidden>Cancelar</button>
+              </div>
+
+              <form id="productForm" class="product-form">
+                <input id="editingProductId" type="hidden" />
+
+                <label>
+                  Produto
+                  <input id="productName" type="text" placeholder="Ex: Arroz 5kg" required />
+                </label>
+
+                <div class="form-row">
+                  <label>
+                    Categoria
+                    <select id="productCategory">
+                      <option>Mercearia</option>
+                      <option>Acougue</option>
+                      <option>Hortifruti</option>
+                      <option>Laticinios</option>
+                      <option>Bebidas</option>
+                      <option>Limpeza</option>
+                      <option>Outros</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    Unidade
+                    <select id="productUnit">
+                      <option>un</option>
+                      <option>kg</option>
+                      <option>g</option>
+                      <option>pacote</option>
+                      <option>caixa</option>
+                      <option>litro</option>
+                    </select>
+                  </label>
+                </div>
+
+                <label>
+                  Mercado
+                  <select id="productMarket">
+                    <option>Assai Cabo de Santo Agostinho</option>
+                    <option>Atacadao</option>
+                    <option>Carrefour</option>
+                    <option>Extra</option>
+                    <option>Mercado local</option>
+                    <option>Outro mercado</option>
+                  </select>
+                </label>
+
+                <label>
+                  Valor atual
+                  <div class="money-field light">
+                    <span>R$</span>
+                    <input id="productPrice" type="number" min="0" step="0.01" inputmode="decimal" required />
+                  </div>
+                </label>
+
+                <button class="primary-button" type="submit">
+                  <span class="button-icon">+</span>
+                  <span id="productSubmitLabel">Salvar produto</span>
+                </button>
+              </form>
+            </section>
+
+            <section class="tool-panel catalog-panel" aria-labelledby="catalogTitle">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Produtos</p>
+                  <h2 id="catalogTitle">Produtos salvos</h2>
+                </div>
+              </div>
+
+              <div class="filters">
+                <label>
+                  Buscar
+                  <input id="searchInput" type="search" placeholder="Nome do produto" />
+                </label>
+                <label>
+                  Ver
+                  <select id="categoryFilter">
+                    <option value="all">Todas</option>
+                    <option>Mercearia</option>
+                    <option>Acougue</option>
+                    <option>Hortifruti</option>
+                    <option>Laticinios</option>
+                    <option>Bebidas</option>
+                    <option>Limpeza</option>
+                    <option>Outros</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="catalog-list" id="catalogList"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="app-screen" id="historyScreen" hidden>
+          <section class="tool-panel history-panel" aria-labelledby="historyTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Historico</p>
+                <h2 id="historyTitle">Mudancas do mes</h2>
+              </div>
+            </div>
+            <div class="history-list" id="historyList"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
