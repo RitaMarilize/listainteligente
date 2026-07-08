@@ -1,4 +1,8 @@
 const STORAGE_KEY = "listaMercadoInteligente.v1";
+const OCR_SCRIPT_URLS = [
+  "https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/tesseract.min.js",
+  "https://unpkg.com/tesseract.js@7/dist/tesseract.min.js",
+];
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -44,13 +48,33 @@ const elements = {
   catalogList: document.querySelector("#catalogList"),
   summaryHighlights: document.querySelector("#summaryHighlights"),
   historyList: document.querySelector("#historyList"),
+  offerMarket: document.querySelector("#offerMarket"),
+  offerUrl: document.querySelector("#offerUrl"),
+  readOfferUrlButton: document.querySelector("#readOfferUrlButton"),
+  offerImageInput: document.querySelector("#offerImageInput"),
+  offerText: document.querySelector("#offerText"),
+  analyzeOffersButton: document.querySelector("#analyzeOffersButton"),
+  clearOffersButton: document.querySelector("#clearOffersButton"),
+  emptyOffersState: document.querySelector("#emptyOffersState"),
+  offerResults: document.querySelector("#offerResults"),
+  offerImportActions: document.querySelector("#offerImportActions"),
+  addOffersToList: document.querySelector("#addOffersToList"),
+  importOffersButton: document.querySelector("#importOffersButton"),
+  ocrProgress: document.querySelector("#ocrProgress"),
+  ocrProgressFill: document.querySelector("#ocrProgressFill"),
+  ocrProgressLabel: document.querySelector("#ocrProgressLabel"),
+  offerPreview: document.querySelector("#offerPreview"),
+  offerPreviewImage: document.querySelector("#offerPreviewImage"),
   tabButtons: document.querySelectorAll(".tab-button"),
   screens: document.querySelectorAll(".app-screen"),
   toast: document.querySelector("#toast"),
 };
 
 let state = loadState();
+saveState();
 let toastTimer = null;
+let offerCandidates = [];
+let offerPreviewUrl = "";
 
 function getCurrentMonth() {
   return new Date().toISOString().slice(0, 7);
@@ -137,7 +161,9 @@ function createSeedState() {
 
 function normalizeState(nextState) {
   nextState.products = (nextState.products || []).map(function (product) {
-    return Object.assign({ market: "Assai Cabo de Santo Agostinho" }, product);
+    return Object.assign({ market: "Assai Cabo de Santo Agostinho" }, product, {
+      name: cleanOfferName(product.name),
+    });
   });
   nextState.listItems = nextState.listItems || [];
   nextState.month = nextState.month || getCurrentMonth();
@@ -219,6 +245,955 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, function (char) {
     return map[char];
   });
+}
+
+function parseBrazilianPrice(value) {
+  const normalized = String(value)
+    .replace(/[^\d,.-]/g, "")
+    .replace(/\.(?=\d{3}(?:\D|$))/g, "")
+    .replace(",", ".");
+  return Number.parseFloat(normalized) || 0;
+}
+
+function isLikelyOcrPrefix(value) {
+  const prefix = String(value || "").trim();
+  const folded = prefix
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const words = folded.split(/\s+/).filter(Boolean);
+
+  return (
+    /\d/.test(prefix) ||
+    words.length > 1 ||
+    /^(?:avi|es|ipla|ml|no|so|ne|total|vv|nm|2lubf)$/.test(folded)
+  );
+}
+
+function cleanOfferName(value) {
+  let name = String(value || "")
+    .replace(/^[\s\-–—•*|:]+/, "")
+    .replace(/\b(?:por|apenas|cada|oferta|leve|de)\s*$/i, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  const productAnchor =
+    /\b(?:sabonete|shampoo|desodorante|papel[\s-]+higi[êe]nico|fralda|amaciante|multi[\s-]*inseticida|inseticida|odorizante|esponja|copos?|papel[\s-]*toalha|frigideira|garrafa[\s-]+t[eé]rmica|panela|arroz|feij[aã]o|leite|banana|carne)\b/i;
+  const anchorMatch = name.match(productAnchor);
+
+  if (anchorMatch && anchorMatch.index > 0 && isLikelyOcrPrefix(name.slice(0, anchorMatch.index))) {
+    name = name.slice(anchorMatch.index);
+  }
+
+  return name
+    .replace(/\bESPONJA\s+(?:DE\s+)?A(?:C|Ç)O\b/gi, "ESPONJA DE AÇO")
+    .replace(/\bAMACIANTE\s+(?:DE\s+)?ROUPAS\b/gi, "AMACIANTE DE ROUPAS")
+    .replace(/\bODORIZANTE\s+(?:DE\s+)?AMBIENTE\b/gi, "ODORIZANTE DE AMBIENTE")
+    .replace(/\bPANELA\s+(?:DE\s+)?PRESS(?:A|Ã)O\b/gi, "PANELA DE PRESSÃO")
+    .replace(/\bPAPEL\s*-\s*TOALHA\b/gi, "PAPEL-TOALHA")
+    .replace(/\bPAPEL\s+HIGIENICO\b/gi, "PAPEL HIGIÊNICO")
+    .replace(/\bGARRAFA\s+TERMICA\b/gi, "GARRAFA TÉRMICA")
+    .replace(/\bFRAGRANCIAS\b/gi, "FRAGRÂNCIAS")
+    .replace(/\bYPE\b/g, "YPÊ")
+    .replace(/\bFRASC\b/gi, "FRASCO")
+    .replace(/\bFRASCO\s+(\d+ML)\s+(\d+ML)\b/gi, "FRASCO LEVE $1 PAGUE $2")
+    .replace(/\bPACOTE\s+12\s+11\s+ROLOS\b/gi, "PACOTE LEVE 12 PAGUE 11 ROLOS")
+    .replace(/\bROLOS\s+(\d+(?:[.,]\d+)?M)\b/gi, "ROLOS DE $1")
+    .replace(/\bFOFO\s+FRASCO$/i, "FOFO FRASCO 500ML")
+    .replace(/(\d+(?:[.,]\d+)?)\s*CM\s*[Xx]\s*(\d+(?:[.,]\d+)?)\s*CM/gi, "$1CM X $2CM")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function inferOfferCategory(name) {
+  const value = normalizeName(name);
+
+  if (/(carne|frango|linguica|linguiça|bovina|suina|suína|acougue)/.test(value)) {
+    return "Acougue";
+  }
+  if (/(banana|maca|maçã|tomate|batata|cebola|verdura|fruta|alface|cenoura)/.test(value)) {
+    return "Hortifruti";
+  }
+  if (/(leite|queijo|iogurte|manteiga|requeijao|requeijão)/.test(value)) {
+    return "Laticinios";
+  }
+  if (/(refrigerante|suco|agua|água|cerveja|vinho|bebida)/.test(value)) {
+    return "Bebidas";
+  }
+  if (/(detergente|sabao|sabão|desinfetante|amaciante|limpeza|papel higienico|papel higiênico)/.test(value)) {
+    return "Limpeza";
+  }
+  if (/(arroz|feijao|feijão|macarrao|macarrão|farinha|acucar|açúcar|cafe|café|oleo|óleo|biscoito)/.test(value)) {
+    return "Mercearia";
+  }
+  return "Outros";
+}
+
+function inferOfferUnit(name) {
+  const value = normalizeName(name);
+
+  if (/\b\d+(?:[.,]\d+)?\s*kg\b|\bkg\b/.test(value)) {
+    return "kg";
+  }
+  if (/\b\d+(?:[.,]\d+)?\s*(?:l|litro|litros)\b/.test(value)) {
+    return "litro";
+  }
+  if (/\bcaixa\b|\bcx\b/.test(value)) {
+    return "caixa";
+  }
+  if (/\bpacote\b|\bpct\b/.test(value)) {
+    return "pacote";
+  }
+  if (/\b\d+\s*g\b/.test(value)) {
+    return "g";
+  }
+  return "un";
+}
+
+function isUsefulOfferName(value) {
+  const name = cleanOfferName(value);
+  const foldedName = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const meaningfulWords = foldedName
+    .split(/\s+/)
+    .filter(function (word) {
+      return /[a-z]/.test(word) && !/^(de|cada|por|leve|pague|preco|oferta|r)$/.test(word);
+    });
+
+  return (
+    name.length >= 3 &&
+    name.length <= 140 &&
+    /[a-zA-ZÀ-ÿ]/.test(name) &&
+    meaningfulWords.length > 0 &&
+    !/^(?:de|cada|por|r\$?|x|\d+[.,]\d{2})(?:\s+(?:de|cada|por|r\$?|x|\d+[.,]\d{2}))*$/i.test(name) &&
+    !/(?:atendimento|cliente|site|validos|estoque|cartao|app meu|assai\.com|redes sociais|proibida|ministerio|saude|parcele|juros|pix|0800)/.test(
+      foldedName
+    ) &&
+    !/^(ofertas?|precos?|preços?|mercado|supermercado|validade|economize|panfleto)$/i.test(name)
+  );
+}
+
+function parseOcrWords(tsv) {
+  return String(tsv || "")
+    .split(/\r?\n/)
+    .slice(1)
+    .map(function (row) {
+      const columns = row.split("\t");
+
+      if (columns.length < 12 || Number(columns[0]) !== 5) {
+        return null;
+      }
+
+      const left = Number(columns[6]);
+      const top = Number(columns[7]);
+      const width = Number(columns[8]);
+      const height = Number(columns[9]);
+      const text = columns.slice(11).join(" ").trim();
+
+      if (!text || !width || !height) {
+        return null;
+      }
+
+      return {
+        text: text,
+        confidence: Number(columns[10]) || 0,
+        lineKey: columns.slice(1, 5).join("-"),
+        left: left,
+        top: top,
+        right: left + width,
+        bottom: top + height,
+        centerX: left + width / 2,
+        centerY: top + height / 2,
+        height: height,
+      };
+    })
+    .filter(Boolean);
+}
+
+function getOcrWordPrice(word) {
+  const normalized = word.text.replace(/[oO]/g, "0");
+  const match = normalized.match(/(\d{1,3}[.,]\d{2})(?!\d)/);
+
+  if (!match) {
+    return 0;
+  }
+
+  const price = parseBrazilianPrice(match[1]);
+  return price > 0 && price < 10000 ? price : 0;
+}
+
+function getMedian(values) {
+  const sorted = values.slice().sort(function (a, b) {
+    return a - b;
+  });
+
+  if (sorted.length === 0) {
+    return 0;
+  }
+
+  return sorted[Math.floor(sorted.length / 2)];
+}
+
+function groupOcrPriceRows(words, medianHeight) {
+  const tolerance = Math.max(8, medianHeight * 1.4);
+  const rows = [];
+
+  words
+    .map(function (word) {
+      return Object.assign({}, word, { price: getOcrWordPrice(word) });
+    })
+    .filter(function (word) {
+      return word.price > 0;
+    })
+    .sort(function (a, b) {
+      return a.centerY - b.centerY || a.centerX - b.centerX;
+    })
+    .forEach(function (word) {
+      let row = rows[rows.length - 1];
+
+      if (!row || Math.abs(word.centerY - row.centerY) > tolerance) {
+        row = { centerY: word.centerY, prices: [] };
+        rows.push(row);
+      }
+
+      const duplicate = row.prices.some(function (priceWord) {
+        return Math.abs(priceWord.centerX - word.centerX) < Math.max(8, medianHeight);
+      });
+
+      if (!duplicate) {
+        row.prices.push(word);
+        row.centerY =
+          row.prices.reduce(function (sum, priceWord) {
+            return sum + priceWord.centerY;
+          }, 0) / row.prices.length;
+      }
+    });
+
+  return rows
+    .map(function (row) {
+      row.prices.sort(function (a, b) {
+        return a.centerX - b.centerX;
+      });
+      return row;
+    })
+    .filter(function (row) {
+      return row.prices.length >= 2;
+    });
+}
+
+function findOfferPricePairs(priceRows, pageWidth, medianHeight) {
+  const pairs = [];
+
+  priceRows.forEach(function (saleRow, saleIndex) {
+    for (let regularIndex = saleIndex - 1; regularIndex >= 0; regularIndex -= 1) {
+      const regularRow = priceRows[regularIndex];
+      const verticalGap = saleRow.centerY - regularRow.centerY;
+
+      if (verticalGap > medianHeight * 14) {
+        break;
+      }
+
+      if (Math.abs(saleRow.prices.length - regularRow.prices.length) > 1) {
+        continue;
+      }
+
+      const itemCount = Math.min(saleRow.prices.length, regularRow.prices.length);
+      const columnTolerance = Math.max(35, (pageWidth / Math.max(itemCount, 1)) * 0.38);
+      const unmatchedRegularPrices = regularRow.prices.slice();
+      let aligned = 0;
+      let discounted = 0;
+
+      saleRow.prices.forEach(function (salePrice) {
+        let nearestIndex = -1;
+        let nearestDistance = Number.POSITIVE_INFINITY;
+
+        unmatchedRegularPrices.forEach(function (regularPrice, regularIndex) {
+          const distance = Math.abs(salePrice.centerX - regularPrice.centerX);
+
+          if (distance < nearestDistance) {
+            nearestDistance = distance;
+            nearestIndex = regularIndex;
+          }
+        });
+
+        if (nearestIndex >= 0 && nearestDistance <= columnTolerance) {
+          const regularPrice = unmatchedRegularPrices.splice(nearestIndex, 1)[0];
+          aligned += 1;
+          if (salePrice.price < regularPrice.price) {
+            discounted += 1;
+          }
+        }
+      });
+
+      if (
+        aligned >= Math.max(2, Math.ceil(itemCount * 0.6)) &&
+        discounted >= Math.max(1, Math.ceil(itemCount * 0.5))
+      ) {
+        pairs.push({ regular: regularRow, sale: saleRow });
+        break;
+      }
+    }
+  });
+
+  return pairs.filter(function (pair, index) {
+    return !pairs.slice(0, index).some(function (previousPair) {
+      return Math.abs(previousPair.sale.centerY - pair.sale.centerY) < medianHeight * 2;
+    });
+  });
+}
+
+function cleanOcrNameToken(value) {
+  const token = String(value || "")
+    .replace(/^[^0-9A-Za-zÀ-ÿ]+|[^0-9A-Za-zÀ-ÿ%]+$/g, "")
+    .trim();
+  const folded = token
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  if (
+    !token ||
+    getOcrWordPrice({ text: token }) ||
+    /^(?:de|cada|por|r|rs|leve|pague|mais|menos|preco|oferta|emb|un)$/i.test(folded) ||
+    (token.length === 1 && !/\d/.test(token))
+  ) {
+    return "";
+  }
+
+  return token;
+}
+
+function buildOcrOfferName(words, left, right, top, bottom) {
+  const lines = new Map();
+
+  words.forEach(function (word) {
+    if (
+      word.centerX < left ||
+      word.centerX >= right ||
+      word.centerY < top ||
+      word.centerY >= bottom ||
+      word.confidence < 12
+    ) {
+      return;
+    }
+
+    const token = cleanOcrNameToken(word.text);
+
+    if (!token) {
+      return;
+    }
+
+    if (!lines.has(word.lineKey)) {
+      lines.set(word.lineKey, { top: word.top, words: [] });
+    }
+
+    lines.get(word.lineKey).words.push(Object.assign({}, word, { cleanText: token }));
+  });
+
+  const lineTexts = Array.from(lines.values())
+    .sort(function (a, b) {
+      return a.top - b.top;
+    })
+    .map(function (line) {
+      return line.words
+        .sort(function (a, b) {
+          return a.left - b.left;
+        })
+        .map(function (word) {
+          return word.cleanText;
+        })
+        .join(" ");
+    })
+    .filter(Boolean)
+    .slice(-6);
+  const tokens = [];
+
+  lineTexts
+    .join(" ")
+    .split(/\s+/)
+    .forEach(function (token) {
+      if (tokens[tokens.length - 1] !== token) {
+        tokens.push(token);
+      }
+    });
+
+  return cleanOfferName(tokens.join(" ").slice(0, 140));
+}
+
+function parseOfferLayout(tsv) {
+  const words = parseOcrWords(tsv);
+
+  if (words.length === 0) {
+    return [];
+  }
+
+  const medianHeight = Math.max(
+    8,
+    getMedian(
+      words.map(function (word) {
+        return word.height;
+      })
+    )
+  );
+  const pageWidth = Math.max.apply(
+    null,
+    words.map(function (word) {
+      return word.right;
+    })
+  );
+  const priceRows = groupOcrPriceRows(words, medianHeight);
+  const pricePairs = findOfferPricePairs(priceRows, pageWidth, medianHeight);
+  const offerMarkers = words.filter(function (word) {
+    const folded = word.text
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z]/g, "");
+    return folded === "por" || folded === "cada";
+  });
+  const detectedRows = pricePairs.map(function (pair) {
+    return {
+      regular: pair.regular,
+      sale: pair.sale,
+    };
+  });
+
+  priceRows.forEach(function (priceRow) {
+    const alreadyDetected = detectedRows.some(function (detectedRow) {
+      return Math.abs(detectedRow.sale.centerY - priceRow.centerY) < medianHeight * 2;
+    });
+
+    if (alreadyDetected || priceRow.prices.length < 2) {
+      return;
+    }
+
+    const nearbyMarkers = offerMarkers.filter(function (marker) {
+      return marker.centerY < priceRow.centerY && priceRow.centerY - marker.centerY <= medianHeight * 12;
+    });
+
+    if (nearbyMarkers.length >= Math.max(1, Math.ceil(priceRow.prices.length * 0.5))) {
+      detectedRows.push({
+        regular: null,
+        sale: priceRow,
+      });
+    }
+  });
+
+  detectedRows.sort(function (a, b) {
+    return a.sale.centerY - b.sale.centerY;
+  });
+  const results = [];
+
+  detectedRows.forEach(function (detectedRow, rowIndex) {
+    const salePrices = detectedRow.sale.prices;
+    const previousBottom = rowIndex > 0 ? detectedRows[rowIndex - 1].sale.centerY + medianHeight * 3 : 0;
+    const referenceY = detectedRow.regular ? detectedRow.regular.centerY : detectedRow.sale.centerY;
+    const nameTop = Math.max(previousBottom, referenceY - medianHeight * 20);
+    const nameBottom = detectedRow.regular
+      ? detectedRow.regular.centerY - medianHeight * 0.8
+      : detectedRow.sale.centerY - medianHeight * 2;
+
+    salePrices.forEach(function (salePrice, columnIndex) {
+      const left =
+        columnIndex === 0 ? 0 : (salePrices[columnIndex - 1].centerX + salePrice.centerX) / 2;
+      const right =
+        columnIndex === salePrices.length - 1
+          ? pageWidth
+          : (salePrice.centerX + salePrices[columnIndex + 1].centerX) / 2;
+      const name = buildOcrOfferName(words, left, right, nameTop, nameBottom);
+
+      if (!isUsefulOfferName(name)) {
+        return;
+      }
+
+      const duplicate = results.some(function (offer) {
+        return normalizeName(offer.name) === normalizeName(name) && Math.abs(offer.price - salePrice.price) < 0.01;
+      });
+
+      if (!duplicate) {
+        results.push({
+          id: createId("offer"),
+          selected: true,
+          name: name,
+          price: salePrice.price,
+          category: inferOfferCategory(name),
+          unit: inferOfferUnit(name),
+        });
+      }
+    });
+  });
+
+  return results;
+}
+
+function parseOfferText(text) {
+  const lines = String(text || "")
+    .replace(/\r/g, "\n")
+    .split(/\n+/)
+    .map(function (line) {
+      return line.replace(/\s+/g, " ").trim();
+    })
+    .filter(Boolean);
+  const results = [];
+  let pendingName = "";
+
+  lines.forEach(function (line) {
+    const pricePattern = /(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+[.,]\d{2})/gi;
+    const matches = Array.from(line.matchAll(pricePattern));
+
+    if (matches.length === 0) {
+      if (isUsefulOfferName(line)) {
+        pendingName = cleanOfferName(line);
+      }
+      return;
+    }
+
+    const priceMatch = matches[matches.length - 1];
+    const price = parseBrazilianPrice(priceMatch[1]);
+    let name = cleanOfferName(line.slice(0, priceMatch.index));
+
+    if (!isUsefulOfferName(name)) {
+      name = pendingName;
+    }
+
+    name = cleanOfferName(name.replace(/\bR\$\s*$/i, ""));
+
+    if (!isUsefulOfferName(name) || price <= 0 || price > 99999) {
+      return;
+    }
+
+    const duplicate = results.some(function (offer) {
+      return normalizeName(offer.name) === normalizeName(name) && Math.abs(offer.price - price) < 0.01;
+    });
+
+    if (!duplicate) {
+      results.push({
+        id: createId("offer"),
+        selected: true,
+        name: name,
+        price: price,
+        category: inferOfferCategory(name),
+        unit: inferOfferUnit(name),
+      });
+    }
+
+    pendingName = "";
+  });
+
+  return results;
+}
+
+function getCategoryOptions(selectedCategory) {
+  return ["Mercearia", "Acougue", "Hortifruti", "Laticinios", "Bebidas", "Limpeza", "Outros"]
+    .map(function (category) {
+      return (
+        '<option value="' +
+        escapeHtml(category) +
+        '"' +
+        (category === selectedCategory ? " selected" : "") +
+        ">" +
+        escapeHtml(category) +
+        "</option>"
+      );
+    })
+    .join("");
+}
+
+function getUnitOptions(selectedUnit) {
+  return ["un", "kg", "g", "pacote", "caixa", "litro"]
+    .map(function (unit) {
+      return (
+        '<option value="' +
+        escapeHtml(unit) +
+        '"' +
+        (unit === selectedUnit ? " selected" : "") +
+        ">" +
+        escapeHtml(unit) +
+        "</option>"
+      );
+    })
+    .join("");
+}
+
+function renderOfferCandidates() {
+  elements.emptyOffersState.hidden = offerCandidates.length > 0;
+  elements.offerImportActions.hidden = offerCandidates.length === 0;
+
+  elements.offerResults.innerHTML = offerCandidates
+    .map(function (offer) {
+      return [
+        '<article class="offer-result" data-offer-id="' + escapeHtml(offer.id) + '">',
+        '<input class="offer-selected" type="checkbox" aria-label="Selecionar oferta"' + (offer.selected ? " checked" : "") + " />",
+        '<label>Produto<input class="offer-name" type="text" value="' + escapeHtml(offer.name) + '" /></label>',
+        '<label class="offer-price">Preco<input type="number" min="0.01" step="0.01" value="' + offer.price.toFixed(2) + '" /></label>',
+        '<label class="offer-category">Categoria<select>' + getCategoryOptions(offer.category) + "</select></label>",
+        '<label class="offer-unit">Unidade<select>' + getUnitOptions(offer.unit) + "</select></label>",
+        "</article>",
+      ].join("");
+    })
+    .join("");
+}
+
+function analyzeOfferText() {
+  offerCandidates = parseOfferText(elements.offerText.value);
+  renderOfferCandidates();
+
+  if (offerCandidates.length === 0) {
+    showToast("Nao encontrei linhas com nome e preco. Revise o texto e tente novamente.");
+    return;
+  }
+
+  showToast(offerCandidates.length + " oferta(s) encontrada(s). Revise antes de importar.");
+}
+
+function setOcrProgress(progress, label) {
+  elements.ocrProgress.hidden = false;
+  elements.ocrProgressFill.style.width = Math.round(Math.max(0, Math.min(progress, 1)) * 100) + "%";
+  elements.ocrProgressLabel.textContent = label;
+}
+
+function hideOcrProgress() {
+  elements.ocrProgress.hidden = true;
+  elements.ocrProgressFill.style.width = "0";
+}
+
+function loadExternalScript(url) {
+  return new Promise(function (resolve, reject) {
+    const script = document.createElement("script");
+    script.src = url;
+    script.async = true;
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
+
+async function ensureOcrReader() {
+  if (window.Tesseract) {
+    return true;
+  }
+
+  for (const url of OCR_SCRIPT_URLS) {
+    try {
+      await loadExternalScript(url);
+      if (window.Tesseract) {
+        return true;
+      }
+    } catch (error) {
+      // Tenta o proximo servidor.
+    }
+  }
+
+  return false;
+}
+
+async function prepareOfferImage(imageSource) {
+  if (!(imageSource instanceof Blob)) {
+    return imageSource;
+  }
+
+  const objectUrl = URL.createObjectURL(imageSource);
+
+  try {
+    const image = await new Promise(function (resolve, reject) {
+      const nextImage = new Image();
+      nextImage.onload = function () {
+        resolve(nextImage);
+      };
+      nextImage.onerror = reject;
+      nextImage.src = objectUrl;
+    });
+
+    if (image.naturalWidth >= 1600) {
+      return imageSource;
+    }
+
+    const scale = Math.min(3, 1600 / Math.max(image.naturalWidth, 1));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(image.naturalWidth * scale);
+    canvas.height = Math.round(image.naturalHeight * scale);
+    const context = canvas.getContext("2d");
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    return await new Promise(function (resolve) {
+      canvas.toBlob(
+        function (blob) {
+          resolve(blob || imageSource);
+        },
+        "image/png",
+        1
+      );
+    });
+  } catch (error) {
+    return imageSource;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+async function recognizeOfferImage(imageSource) {
+  elements.analyzeOffersButton.disabled = true;
+  elements.readOfferUrlButton.disabled = true;
+  setOcrProgress(0.04, "Carregando o leitor...");
+  let worker = null;
+
+  try {
+    const readerLoaded = await ensureOcrReader();
+
+    if (!readerLoaded) {
+      throw new Error("OCR_UNAVAILABLE");
+    }
+
+    worker = await window.Tesseract.createWorker("por", 1, {
+      logger: function (message) {
+        if (typeof message.progress === "number") {
+          const labels = {
+            "loading tesseract core": "Carregando o leitor...",
+            "initializing tesseract": "Preparando a leitura...",
+            "loading language traineddata": "Carregando portugues...",
+            "initializing api": "Iniciando reconhecimento...",
+            "recognizing text": "Lendo o panfleto...",
+          };
+          setOcrProgress(message.progress, labels[message.status] || "Processando imagem...");
+        }
+      },
+    });
+    await worker.setParameters({
+      tessedit_pageseg_mode: window.Tesseract.PSM ? window.Tesseract.PSM.SPARSE_TEXT : "11",
+      preserve_interword_spaces: "1",
+    });
+    const preparedImage = await prepareOfferImage(imageSource);
+    const result = await worker.recognize(preparedImage, {}, { text: true, tsv: true });
+    elements.offerText.value = result.data.text.trim();
+    setOcrProgress(1, "Leitura concluida");
+    const layoutCandidates = parseOfferLayout(result.data.tsv);
+
+    if (layoutCandidates.length >= 2) {
+      offerCandidates = layoutCandidates;
+      renderOfferCandidates();
+      showToast(layoutCandidates.length + " oferta(s) separada(s) pelas colunas do panfleto.");
+    } else {
+      analyzeOfferText();
+    }
+
+    window.setTimeout(hideOcrProgress, 1200);
+  } catch (error) {
+    hideOcrProgress();
+    if (error.message === "OCR_UNAVAILABLE") {
+      showToast("O leitor de imagem nao carregou. Verifique a internet ou cole o texto do panfleto.");
+    } else {
+      showToast("Nao consegui ler essa imagem. Tente uma foto mais nitida ou cole o texto.");
+    }
+  } finally {
+    if (worker) {
+      try {
+        await worker.terminate();
+      } catch (error) {
+        // O leitor ja foi encerrado.
+      }
+    }
+    elements.analyzeOffersButton.disabled = false;
+    elements.readOfferUrlButton.disabled = false;
+  }
+}
+
+function showOfferPreview(file) {
+  if (offerPreviewUrl) {
+    URL.revokeObjectURL(offerPreviewUrl);
+  }
+
+  offerPreviewUrl = URL.createObjectURL(file);
+  elements.offerPreviewImage.src = offerPreviewUrl;
+  elements.offerPreview.hidden = false;
+}
+
+async function isOfferImageFile(file) {
+  if (file.type.startsWith("image/") || /\.(avif|bmp|gif|heic|heif|jpe?g|png|tiff?|webp)$/i.test(file.name)) {
+    return true;
+  }
+
+  const bytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  const startsWith = function (signature) {
+    return signature.every(function (byte, index) {
+      return bytes[index] === byte;
+    });
+  };
+
+  return (
+    startsWith([0xff, 0xd8, 0xff]) ||
+    startsWith([0x89, 0x50, 0x4e, 0x47]) ||
+    startsWith([0x47, 0x49, 0x46, 0x38]) ||
+    startsWith([0x42, 0x4d]) ||
+    (startsWith([0x52, 0x49, 0x46, 0x46]) &&
+      bytes[8] === 0x57 &&
+      bytes[9] === 0x45 &&
+      bytes[10] === 0x42 &&
+      bytes[11] === 0x50)
+  );
+}
+
+async function readOfferFile(file) {
+  if (!file) {
+    return;
+  }
+
+  if (await isOfferImageFile(file)) {
+    elements.offerText.value = "";
+    offerCandidates = [];
+    renderOfferCandidates();
+    showOfferPreview(file);
+    await recognizeOfferImage(file);
+    return;
+  }
+
+  if (/\.(txt|csv)$/i.test(file.name) || file.type === "text/csv" || file.type === "text/plain") {
+    elements.offerPreview.hidden = true;
+    elements.offerText.value = await file.text();
+    analyzeOfferText();
+    return;
+  }
+
+  showToast("Use uma imagem, arquivo TXT ou CSV.");
+}
+
+async function readOfferUrl() {
+  const url = elements.offerUrl.value.trim();
+
+  if (!/^https?:\/\//i.test(url)) {
+    showToast("Cole um link completo com http ou https.");
+    return;
+  }
+
+  elements.readOfferUrlButton.disabled = true;
+  setOcrProgress(0.08, "Buscando o link...");
+
+  try {
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error("Falha ao buscar");
+    }
+
+    const contentType = response.headers.get("content-type") || "";
+
+    if (contentType.includes("application/pdf")) {
+      throw new Error("PDF_UNSUPPORTED");
+    }
+
+    if (contentType.startsWith("image/")) {
+      const imageBlob = await response.blob();
+      showOfferPreview(imageBlob);
+      hideOcrProgress();
+      await recognizeOfferImage(imageBlob);
+      return;
+    }
+
+    const source = await response.text();
+    const documentSource = new DOMParser().parseFromString(source, "text/html");
+    documentSource.querySelectorAll("script, style, noscript, svg").forEach(function (node) {
+      node.remove();
+    });
+    elements.offerText.value = (documentSource.body ? documentSource.body.innerText : source).trim();
+    hideOcrProgress();
+    analyzeOfferText();
+  } catch (error) {
+    hideOcrProgress();
+    if (error.message === "PDF_UNSUPPORTED") {
+      showToast("Para PDF, salve a pagina como imagem e envie pelo campo de arquivo.");
+    } else {
+      showToast("Esse site bloqueou a leitura. Baixe ou tire um print do panfleto e envie a imagem.");
+    }
+  } finally {
+    elements.readOfferUrlButton.disabled = false;
+  }
+}
+
+function readOfferRows() {
+  const rows = Array.from(elements.offerResults.querySelectorAll("[data-offer-id]"));
+
+  return rows
+    .map(function (row) {
+      return {
+        selected: row.querySelector(".offer-selected").checked,
+        name: row.querySelector(".offer-name").value.trim(),
+        price: toNumber(row.querySelector(".offer-price input").value),
+        category: row.querySelector(".offer-category select").value,
+        unit: row.querySelector(".offer-unit select").value,
+      };
+    })
+    .filter(function (offer) {
+      return offer.selected && offer.name && offer.price > 0;
+    });
+}
+
+function importSelectedOffers() {
+  const offers = readOfferRows();
+  const market = elements.offerMarket.value.trim() || "Mercado nao informado";
+
+  if (offers.length === 0) {
+    showToast("Selecione pelo menos uma oferta valida.");
+    return;
+  }
+
+  offers.forEach(function (offer) {
+    let product = state.products.find(function (entry) {
+      return normalizeName(entry.name) === normalizeName(offer.name) && normalizeName(getProductMarket(entry)) === normalizeName(market);
+    });
+
+    if (product) {
+      updateProductPrice(product, {
+        name: offer.name,
+        category: offer.category,
+        unit: offer.unit,
+        market: market,
+        price: offer.price,
+      });
+    } else {
+      product = {
+        id: createId("prod"),
+        name: offer.name,
+        category: offer.category,
+        unit: offer.unit,
+        market: market,
+        currentPrice: offer.price,
+        previousPrice: null,
+        history: [{ month: state.month, price: offer.price }],
+      };
+      state.products.push(product);
+    }
+
+    if (
+      elements.addOffersToList.checked &&
+      !state.listItems.some(function (item) {
+        return item.productId === product.id;
+      })
+    ) {
+      state.listItems.push({
+        id: createId("item"),
+        productId: product.id,
+        quantity: 1,
+      });
+    }
+  });
+
+  saveState();
+  renderAll();
+  showToast(offers.length + " oferta(s) importada(s).");
+  switchScreen(elements.addOffersToList.checked ? "listScreen" : "productsScreen");
+}
+
+function clearOfferImport() {
+  offerCandidates = [];
+  elements.offerUrl.value = "";
+  elements.offerText.value = "";
+  elements.offerImageInput.value = "";
+  elements.offerPreview.hidden = true;
+  hideOcrProgress();
+  renderOfferCandidates();
 }
 
 function calculateTotals() {
@@ -795,6 +1770,13 @@ elements.budget.addEventListener("input", function () {
 
 elements.productForm.addEventListener("submit", saveProduct);
 elements.cancelEditButton.addEventListener("click", resetProductForm);
+elements.analyzeOffersButton.addEventListener("click", analyzeOfferText);
+elements.readOfferUrlButton.addEventListener("click", readOfferUrl);
+elements.importOffersButton.addEventListener("click", importSelectedOffers);
+elements.clearOffersButton.addEventListener("click", clearOfferImport);
+elements.offerImageInput.addEventListener("change", function () {
+  readOfferFile(elements.offerImageInput.files[0]);
+});
 
 elements.addToListForm.addEventListener("submit", function (event) {
   event.preventDefault();

@@ -28,6 +28,10 @@
           <span class="tab-icon list-icon" aria-hidden="true"></span>
           Lista
         </button>
+        <button class="tab-button" type="button" data-screen-target="offersScreen" aria-selected="false">
+          <span class="tab-icon offer-icon" aria-hidden="true"></span>
+          Ofertas
+        </button>
         <button class="tab-button" type="button" data-screen-target="productsScreen" aria-selected="false">
           <span class="tab-icon product-icon" aria-hidden="true"></span>
           Produtos
@@ -109,6 +113,83 @@
 
             <div class="shopping-list" id="shoppingList"></div>
           </section>
+        </section>
+
+        <section class="app-screen" id="offersScreen" hidden>
+          <div class="offers-layout">
+            <section class="tool-panel import-panel" aria-labelledby="offerImportTitle">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Panfletos</p>
+                  <h2 id="offerImportTitle">Buscar ofertas</h2>
+                </div>
+              </div>
+
+              <div class="offer-source-form">
+                <label>
+                  Mercado
+                  <input id="offerMarket" type="text" value="Assai Cabo de Santo Agostinho" placeholder="Nome do mercado" />
+                </label>
+
+                <label>
+                  Link do panfleto ou imagem
+                  <div class="inline-action">
+                    <input id="offerUrl" type="url" placeholder="https://..." />
+                    <button class="ghost-button" id="readOfferUrlButton" type="button">Ler link</button>
+                  </div>
+                </label>
+
+                <div class="source-divider"><span>ou</span></div>
+
+                <label class="file-picker">
+                  <span>Imagem do panfleto</span>
+                  <input id="offerImageInput" type="file" accept="image/*,.txt,.csv" />
+                </label>
+
+                <div class="ocr-progress" id="ocrProgress" hidden>
+                  <div class="ocr-progress-track">
+                    <div class="ocr-progress-fill" id="ocrProgressFill"></div>
+                  </div>
+                  <span id="ocrProgressLabel">Preparando leitura...</span>
+                </div>
+
+                <div class="offer-preview" id="offerPreview" hidden>
+                  <img id="offerPreviewImage" alt="Previa do panfleto selecionado" />
+                </div>
+
+                <label>
+                  Texto das ofertas
+                  <textarea id="offerText" rows="9" placeholder="Exemplo:&#10;Arroz parboilizado 5kg R$ 24,90&#10;Feijao carioca 1kg R$ 7,99"></textarea>
+                </label>
+
+                <button class="primary-button" id="analyzeOffersButton" type="button">Encontrar produtos e precos</button>
+              </div>
+            </section>
+
+            <section class="tool-panel review-panel" aria-labelledby="offerReviewTitle">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Revisao</p>
+                  <h2 id="offerReviewTitle">Ofertas encontradas</h2>
+                </div>
+                <button class="ghost-button compact" id="clearOffersButton" type="button">Limpar</button>
+              </div>
+
+              <div class="empty-state" id="emptyOffersState">
+                Adicione um link, uma imagem ou cole o texto do panfleto.
+              </div>
+
+              <div class="offer-results" id="offerResults"></div>
+
+              <div class="offer-import-actions" id="offerImportActions" hidden>
+                <label class="check-option">
+                  <input id="addOffersToList" type="checkbox" checked />
+                  <span>Adicionar tambem na lista de compras</span>
+                </label>
+                <button class="primary-button" id="importOffersButton" type="button">Importar selecionados</button>
+              </div>
+            </section>
+          </div>
         </section>
 
         <section class="app-screen" id="productsScreen" hidden>
