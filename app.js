@@ -1,4 +1,4 @@
-const STORAGE_KEY = "listaMercadoInteligente.v1";
+﻿const STORAGE_KEY = "listaMercadoInteligente.v1";
 const OCR_SCRIPT_URLS = [
   "https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/tesseract.min.js",
   "https://unpkg.com/tesseract.js@7/dist/tesseract.min.js",
@@ -75,6 +75,7 @@ saveState();
 let toastTimer = null;
 let offerCandidates = [];
 let offerPreviewUrl = "";
+let expandedCategories = new Set();
 
 function getCurrentMonth() {
   return new Date().toISOString().slice(0, 7);
@@ -165,7 +166,11 @@ function normalizeState(nextState) {
       name: cleanOfferName(product.name),
     });
   });
-  nextState.listItems = nextState.listItems || [];
+  nextState.listItems = (nextState.listItems || []).map(function (item) {
+    return Object.assign({}, item, {
+      quantity: toWholeQuantity(item.quantity),
+    });
+  });
   nextState.month = nextState.month || getCurrentMonth();
   nextState.budget = Number(nextState.budget) || 0;
   return nextState;
@@ -195,6 +200,10 @@ function formatMoney(value) {
 
 function toNumber(value) {
   return Number.parseFloat(value) || 0;
+}
+
+function toWholeQuantity(value) {
+  return Math.max(Math.round(toNumber(value)), 1);
 }
 
 function normalizeName(name) {
@@ -272,13 +281,13 @@ function isLikelyOcrPrefix(value) {
 
 function cleanOfferName(value) {
   let name = String(value || "")
-    .replace(/^[\s\-–—•*|:]+/, "")
+    .replace(/^[\s\-â€“â€”â€¢*|:]+/, "")
     .replace(/\b(?:por|apenas|cada|oferta|leve|de)\s*$/i, "")
     .replace(/\s{2,}/g, " ")
     .trim();
 
   const productAnchor =
-    /\b(?:sabonete|shampoo|desodorante|papel[\s-]+higi[êe]nico|fralda|amaciante|multi[\s-]*inseticida|inseticida|odorizante|esponja|copos?|papel[\s-]*toalha|frigideira|garrafa[\s-]+t[eé]rmica|panela|arroz|feij[aã]o|leite|banana|carne)\b/i;
+    /\b(?:sabonete|shampoo|desodorante|papel[\s-]+higi[Ãªe]nico|fralda|amaciante|multi[\s-]*inseticida|inseticida|odorizante|esponja|copos?|papel[\s-]*toalha|frigideira|garrafa[\s-]+t[eÃ©]rmica|panela|arroz|feij[aÃ£]o|leite|banana|carne)\b/i;
   const anchorMatch = name.match(productAnchor);
 
   if (anchorMatch && anchorMatch.index > 0 && isLikelyOcrPrefix(name.slice(0, anchorMatch.index))) {
@@ -286,15 +295,15 @@ function cleanOfferName(value) {
   }
 
   return name
-    .replace(/\bESPONJA\s+(?:DE\s+)?A(?:C|Ç)O\b/gi, "ESPONJA DE AÇO")
+    .replace(/\bESPONJA\s+(?:DE\s+)?A(?:C|Ã‡)O\b/gi, "ESPONJA DE AÃ‡O")
     .replace(/\bAMACIANTE\s+(?:DE\s+)?ROUPAS\b/gi, "AMACIANTE DE ROUPAS")
     .replace(/\bODORIZANTE\s+(?:DE\s+)?AMBIENTE\b/gi, "ODORIZANTE DE AMBIENTE")
-    .replace(/\bPANELA\s+(?:DE\s+)?PRESS(?:A|Ã)O\b/gi, "PANELA DE PRESSÃO")
+    .replace(/\bPANELA\s+(?:DE\s+)?PRESS(?:A|Ãƒ)O\b/gi, "PANELA DE PRESSÃƒO")
     .replace(/\bPAPEL\s*-\s*TOALHA\b/gi, "PAPEL-TOALHA")
-    .replace(/\bPAPEL\s+HIGIENICO\b/gi, "PAPEL HIGIÊNICO")
-    .replace(/\bGARRAFA\s+TERMICA\b/gi, "GARRAFA TÉRMICA")
-    .replace(/\bFRAGRANCIAS\b/gi, "FRAGRÂNCIAS")
-    .replace(/\bYPE\b/g, "YPÊ")
+    .replace(/\bPAPEL\s+HIGIENICO\b/gi, "PAPEL HIGIÃŠNICO")
+    .replace(/\bGARRAFA\s+TERMICA\b/gi, "GARRAFA TÃ‰RMICA")
+    .replace(/\bFRAGRANCIAS\b/gi, "FRAGRÃ‚NCIAS")
+    .replace(/\bYPE\b/g, "YPÃŠ")
     .replace(/\bFRASC\b/gi, "FRASCO")
     .replace(/\bFRASCO\s+(\d+ML)\s+(\d+ML)\b/gi, "FRASCO LEVE $1 PAGUE $2")
     .replace(/\bPACOTE\s+12\s+11\s+ROLOS\b/gi, "PACOTE LEVE 12 PAGUE 11 ROLOS")
@@ -308,22 +317,22 @@ function cleanOfferName(value) {
 function inferOfferCategory(name) {
   const value = normalizeName(name);
 
-  if (/(carne|frango|linguica|linguiça|bovina|suina|suína|acougue)/.test(value)) {
+  if (/(carne|frango|linguica|linguiÃ§a|bovina|suina|suÃ­na|acougue)/.test(value)) {
     return "Acougue";
   }
-  if (/(banana|maca|maçã|tomate|batata|cebola|verdura|fruta|alface|cenoura)/.test(value)) {
+  if (/(banana|maca|maÃ§Ã£|tomate|batata|cebola|verdura|fruta|alface|cenoura)/.test(value)) {
     return "Hortifruti";
   }
-  if (/(leite|queijo|iogurte|manteiga|requeijao|requeijão)/.test(value)) {
+  if (/(leite|queijo|iogurte|manteiga|requeijao|requeijÃ£o)/.test(value)) {
     return "Laticinios";
   }
-  if (/(refrigerante|suco|agua|água|cerveja|vinho|bebida)/.test(value)) {
+  if (/(refrigerante|suco|agua|Ã¡gua|cerveja|vinho|bebida)/.test(value)) {
     return "Bebidas";
   }
-  if (/(detergente|sabao|sabão|desinfetante|amaciante|limpeza|papel higienico|papel higiênico)/.test(value)) {
+  if (/(detergente|sabao|sabÃ£o|desinfetante|amaciante|limpeza|papel higienico|papel higiÃªnico)/.test(value)) {
     return "Limpeza";
   }
-  if (/(arroz|feijao|feijão|macarrao|macarrão|farinha|acucar|açúcar|cafe|café|oleo|óleo|biscoito)/.test(value)) {
+  if (/(arroz|feijao|feijÃ£o|macarrao|macarrÃ£o|farinha|acucar|aÃ§Ãºcar|cafe|cafÃ©|oleo|Ã³leo|biscoito)/.test(value)) {
     return "Mercearia";
   }
   return "Outros";
@@ -365,13 +374,13 @@ function isUsefulOfferName(value) {
   return (
     name.length >= 3 &&
     name.length <= 140 &&
-    /[a-zA-ZÀ-ÿ]/.test(name) &&
+    /[a-zA-Z\u00C0-\u00FF]/.test(name) &&
     meaningfulWords.length > 0 &&
     !/^(?:de|cada|por|r\$?|x|\d+[.,]\d{2})(?:\s+(?:de|cada|por|r\$?|x|\d+[.,]\d{2}))*$/i.test(name) &&
     !/(?:atendimento|cliente|site|validos|estoque|cartao|app meu|assai\.com|redes sociais|proibida|ministerio|saude|parcele|juros|pix|0800)/.test(
       foldedName
     ) &&
-    !/^(ofertas?|precos?|preços?|mercado|supermercado|validade|economize|panfleto)$/i.test(name)
+    !/^(ofertas?|precos?|preÃ§os?|mercado|supermercado|validade|economize|panfleto)$/i.test(name)
   );
 }
 
@@ -546,7 +555,7 @@ function findOfferPricePairs(priceRows, pageWidth, medianHeight) {
 
 function cleanOcrNameToken(value) {
   const token = String(value || "")
-    .replace(/^[^0-9A-Za-zÀ-ÿ]+|[^0-9A-Za-zÀ-ÿ%]+$/g, "")
+    .replace(/^[^0-9A-Za-z\u00C0-\u00FF]+|[^0-9A-Za-z\u00C0-\u00FF%]+$/g, "")
     .trim();
   const folded = token
     .normalize("NFD")
@@ -1292,23 +1301,92 @@ function renderBudget() {
   }
 }
 
+const CATEGORY_ORDER = ["Mercearia", "Acougue", "Hortifruti", "Laticinios", "Bebidas", "Limpeza", "Outros"];
+
+function getCategoryName(product) {
+  return product && product.category ? product.category : "Outros";
+}
+
+function getCategoryRank(category) {
+  const index = CATEGORY_ORDER.indexOf(category);
+  return index === -1 ? CATEGORY_ORDER.length : index;
+}
+
+function sortByCategoryThenName(a, b) {
+  const categoryDiff = getCategoryRank(getCategoryName(a)) - getCategoryRank(getCategoryName(b));
+
+  if (categoryDiff !== 0) {
+    return categoryDiff;
+  }
+
+  return a.name.localeCompare(b.name, "pt-BR");
+}
+
+function getCategoryInitial(category) {
+  return (category || "Outros").slice(0, 1).toUpperCase();
+}
+
+function getCategoryKey(category) {
+  return normalizeName(category || "Outros");
+}
+
+function getCategoryDomId(category) {
+  const safeCategory = getCategoryKey(category)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return "category-items-" + (safeCategory || "outros");
+}
+
+function getGroupedProducts(products) {
+  return products
+    .slice()
+    .sort(sortByCategoryThenName)
+    .reduce(function (groups, product) {
+      const category = getCategoryName(product);
+      let group = groups.find(function (entry) {
+        return entry.category === category;
+      });
+
+      if (!group) {
+        group = {
+          category: category,
+          products: [],
+        };
+        groups.push(group);
+      }
+
+      group.products.push(product);
+      return groups;
+    }, []);
+}
+
 function renderProductOptions() {
   const selected = elements.productSelect.value;
+  const groups = getGroupedProducts(state.products);
 
-  elements.productSelect.innerHTML = state.products
-    .slice()
-    .sort(function (a, b) {
-      return a.name.localeCompare(b.name, "pt-BR");
-    })
-    .map(function (product) {
+  elements.productSelect.innerHTML = groups
+    .map(function (group) {
       return (
-        '<option value="' +
-        escapeHtml(product.id) +
+        '<optgroup label="' +
+        escapeHtml(group.category) +
         '">' +
-        escapeHtml(product.name) +
-        " - " +
-        formatMoney(product.currentPrice) +
-        "</option>"
+        group.products
+          .map(function (product) {
+            return (
+              '<option value="' +
+              escapeHtml(product.id) +
+              '">' +
+              escapeHtml(product.name) +
+              " - " +
+              formatMoney(product.currentPrice) +
+              "</option>"
+            );
+          })
+          .join("") +
+        "</optgroup>"
       );
     })
     .join("");
@@ -1327,35 +1405,108 @@ function renderProductOptions() {
 function renderShoppingList() {
   elements.emptyListState.hidden = state.listItems.length > 0;
 
-  elements.shoppingList.innerHTML = state.listItems
-    .map(function (item) {
-      const product = state.products.find(function (entry) {
-        return entry.id === item.productId;
+  const groups = state.listItems.reduce(function (acc, item) {
+    const product = state.products.find(function (entry) {
+      return entry.id === item.productId;
+    });
+
+    if (!product) {
+      return acc;
+    }
+
+    const category = getCategoryName(product);
+    let group = acc.find(function (entry) {
+      return entry.category === category;
+    });
+
+    if (!group) {
+      group = {
+        category: category,
+        rows: [],
+        total: 0,
+      };
+      acc.push(group);
+    }
+
+    const total = product.currentPrice * item.quantity;
+    group.rows.push({
+      item: item,
+      product: product,
+      total: total,
+    });
+    group.total += total;
+
+    return acc;
+  }, []);
+
+  groups.sort(function (a, b) {
+    return getCategoryRank(a.category) - getCategoryRank(b.category) || a.category.localeCompare(b.category, "pt-BR");
+  });
+
+  elements.shoppingList.innerHTML = groups
+    .map(function (group) {
+      group.rows.sort(function (a, b) {
+        return a.product.name.localeCompare(b.product.name, "pt-BR");
       });
 
-      if (!product) {
-        return "";
-      }
-
-      const total = product.currentPrice * item.quantity;
-      const safeName = escapeHtml(product.name);
+      const itemText = group.rows.length === 1 ? "1 item" : group.rows.length + " itens";
+      const categoryKey = getCategoryKey(group.category);
+      const categoryItemsId = getCategoryDomId(group.category);
+      const isExpanded = expandedCategories.has(categoryKey);
 
       return [
-        '<article class="list-row" data-item-id="' + escapeHtml(item.id) + '">',
-        "<div>",
-        '<p class="product-name">' + safeName + "</p>",
-        '<p class="product-meta">' + formatMoney(product.currentPrice) + " por " + escapeHtml(product.unit) + " - " + escapeHtml(getProductMarket(product)) + "</p>",
+        '<section class="category-group ' + (isExpanded ? "is-open" : "is-collapsed") + '" data-category="' + escapeHtml(categoryKey) + '">',
+        '<header class="category-heading">',
+        '<button class="category-toggle" type="button" data-action="toggle-category" data-category="' +
+          escapeHtml(categoryKey) +
+          '" aria-expanded="' +
+          (isExpanded ? "true" : "false") +
+          '" aria-controls="' +
+          escapeHtml(categoryItemsId) +
+          '">',
+        '<span class="category-title">',
+        '<span class="category-mark" aria-hidden="true">' + escapeHtml(getCategoryInitial(group.category)) + "</span>",
+        '<span class="category-title-text">',
+        "<strong>" + escapeHtml(group.category) + "</strong>",
+        "<small>" + itemText + " na lista</small>",
+        "</span>",
+        "</span>",
+        '<span class="category-action">',
+        '<span class="category-action-text">' + (isExpanded ? "Ocultar itens" : "Ver itens") + "</span>",
+        '<span class="category-toggle-state" aria-hidden="true">' + (isExpanded ? "-" : "+") + "</span>",
+        "</span>",
+        "</button>",
+        '<span class="category-total">' + formatMoney(group.total) + "</span>",
+        "</header>",
+        '<div class="category-items" id="' + escapeHtml(categoryItemsId) + '"' + (isExpanded ? "" : " hidden") + ">",
+        group.rows
+          .map(function (row) {
+            const item = row.item;
+            const product = row.product;
+            const total = row.total;
+            const safeName = escapeHtml(product.name);
+
+            return [
+              '<article class="list-row" data-item-id="' + escapeHtml(item.id) + '">',
+              "<div>",
+              '<p class="product-name">' + safeName + "</p>",
+              '<p class="product-meta">' + formatMoney(product.currentPrice) + " por " + escapeHtml(product.unit) + " - " + escapeHtml(getProductMarket(product)) + "</p>",
+              "</div>",
+              '<input class="qty-input" type="number" min="1" step="1" value="' +
+                toWholeQuantity(item.quantity) +
+                '" aria-label="Quantidade de ' +
+                safeName +
+                '" data-action="quantity" />',
+              '<div class="price-text">' + formatMoney(total) + "</div>",
+              '<button class="row-button" type="button" data-action="remove" aria-label="Remover ' +
+                safeName +
+                '" title="Remover">x</button>',
+              "</article>",
+            ].join("");
+          })
+          .join(""),
         "</div>",
-        '<input class="qty-input" type="number" min="0.01" step="0.01" value="' +
-          item.quantity +
-          '" aria-label="Quantidade de ' +
-          safeName +
-          '" data-action="quantity" />',
-        '<div class="price-text">' + formatMoney(total) + "</div>",
-        '<button class="row-button" type="button" data-action="remove" aria-label="Remover ' +
-          safeName +
-          '" title="Remover">x</button>',
-        "</article>",
+        "</section>",
       ].join("");
     })
     .join("");
@@ -1409,6 +1560,7 @@ function renderCatalog() {
     })
     .join("");
 }
+
 
 function getMonthTrend(product, selectedMonth) {
   const monthValue = selectedMonth || state.month || getCurrentMonth();
@@ -1713,7 +1865,7 @@ function updateProductPrice(product, values) {
 }
 
 function addProductToList(productId, quantity) {
-  const amount = quantity || 1;
+  const amount = toWholeQuantity(quantity);
   const product = state.products.find(function (entry) {
     return entry.id === productId;
   });
@@ -1728,7 +1880,7 @@ function addProductToList(productId, quantity) {
   });
 
   if (existing) {
-    existing.quantity = Number((existing.quantity + amount).toFixed(2));
+    existing.quantity = toWholeQuantity(existing.quantity + amount);
   } else {
     state.listItems.push({
       id: createId("item"),
@@ -1737,6 +1889,7 @@ function addProductToList(productId, quantity) {
     });
   }
 
+  expandedCategories.add(getCategoryKey(getCategoryName(product)));
   saveState();
   renderAll();
   showToast(product.name + " entrou na lista.");
@@ -1770,22 +1923,26 @@ elements.budget.addEventListener("input", function () {
 
 elements.productForm.addEventListener("submit", saveProduct);
 elements.cancelEditButton.addEventListener("click", resetProductForm);
-elements.analyzeOffersButton.addEventListener("click", analyzeOfferText);
-elements.readOfferUrlButton.addEventListener("click", readOfferUrl);
-elements.importOffersButton.addEventListener("click", importSelectedOffers);
-elements.clearOffersButton.addEventListener("click", clearOfferImport);
-elements.offerImageInput.addEventListener("change", function () {
-  readOfferFile(elements.offerImageInput.files[0]);
-});
+
+if (elements.analyzeOffersButton) {
+  elements.analyzeOffersButton.addEventListener("click", analyzeOfferText);
+  elements.readOfferUrlButton.addEventListener("click", readOfferUrl);
+  elements.importOffersButton.addEventListener("click", importSelectedOffers);
+  elements.clearOffersButton.addEventListener("click", clearOfferImport);
+  elements.offerImageInput.addEventListener("change", function () {
+    readOfferFile(elements.offerImageInput.files[0]);
+  });
+}
 
 elements.addToListForm.addEventListener("submit", function (event) {
   event.preventDefault();
-  addProductToList(elements.productSelect.value, Math.max(toNumber(elements.itemQuantity.value), 0.01));
+  addProductToList(elements.productSelect.value, toWholeQuantity(elements.itemQuantity.value));
   elements.itemQuantity.value = 1;
 });
 
 elements.clearListButton.addEventListener("click", function () {
   state.listItems = [];
+  expandedCategories.clear();
   saveState();
   renderAll();
   showToast("Lista limpa.");
@@ -1805,13 +1962,32 @@ elements.shoppingList.addEventListener("input", function (event) {
     return;
   }
 
-  item.quantity = Math.max(toNumber(event.target.value), 0.01);
+  item.quantity = toWholeQuantity(event.target.value);
+  event.target.value = item.quantity;
   const product = state.products.find(function (entry) {
     return entry.id === item.productId;
   });
 
   if (product) {
     row.querySelector(".price-text").textContent = formatMoney(product.currentPrice * item.quantity);
+  }
+
+  const categoryGroup = row.closest(".category-group");
+
+  if (categoryGroup) {
+    const categoryTotal = state.listItems.reduce(function (sum, listItem) {
+      const listProduct = state.products.find(function (entry) {
+        return entry.id === listItem.productId;
+      });
+
+      if (!listProduct || getCategoryKey(getCategoryName(listProduct)) !== categoryGroup.dataset.category) {
+        return sum;
+      }
+
+      return sum + listProduct.currentPrice * listItem.quantity;
+    }, 0);
+
+    categoryGroup.querySelector(".category-total").textContent = formatMoney(categoryTotal);
   }
 
   saveState();
@@ -1823,6 +1999,19 @@ elements.shoppingList.addEventListener("click", function (event) {
   const button = event.target.closest("button[data-action]");
 
   if (!button) {
+    return;
+  }
+
+  if (button.dataset.action === "toggle-category") {
+    const category = button.dataset.category;
+
+    if (expandedCategories.has(category)) {
+      expandedCategories.delete(category);
+    } else {
+      expandedCategories.add(category);
+    }
+
+    renderShoppingList();
     return;
   }
 
@@ -1887,3 +2076,4 @@ elements.tabButtons.forEach(function (button) {
 syncTopInputs();
 renderAll();
 switchScreen("summaryScreen");
+
