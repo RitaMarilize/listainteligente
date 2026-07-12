@@ -2571,6 +2571,7 @@ h1 {
 
 .app-shell > .topbar .month-box {
   width: min(260px, 100%);
+  max-width: 100%;
   margin: 0 auto;
   border: 1px solid rgba(18, 49, 77, 0.1);
   border-radius: 14px;
@@ -2589,6 +2590,10 @@ h1 {
 }
 
 .app-shell > .topbar .month-box input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 44px;
   border-color: rgba(18, 49, 77, 0.1);
   border-radius: 10px;
@@ -2635,7 +2640,32 @@ h1 {
     gap: 10px;
   }
 
+  .app-shell > .topbar {
+    padding: 16px 12px 14px;
+  }
+
   .app-shell > .topbar .month-box {
-    width: min(100%, 280px);
+    width: min(190px, 100%);
+    padding: 7px;
+    border-radius: 12px;
+  }
+
+  .app-shell > .topbar .month-box label {
+    margin-bottom: 5px;
+    font-size: 0.66rem;
+    line-height: 1;
+  }
+
+  .app-shell > .topbar .month-box input {
+    min-height: 34px;
+    padding: 0 8px;
+    font-size: 0.78rem;
+    line-height: 1;
+  }
+}
+
+@media (max-width: 320px) {
+  .app-shell > .topbar .month-box {
+    width: min(170px, 100%);
   }
 }
