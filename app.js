@@ -295,6 +295,49 @@ function renderStaticIcons() {
   });
 }
 
+function startFooterTypewriter() {
+  const target = document.querySelector(".footer-typewriter");
+
+  if (!target) {
+    return;
+  }
+
+  const text = target.dataset.text || "Desenvolvido por Rita M.";
+  let index = 1;
+  let direction = 1;
+
+  target.textContent = text.slice(0, index);
+
+  function tick() {
+    if (direction > 0) {
+      index += 1;
+
+      if (index >= text.length) {
+        index = text.length;
+        direction = -1;
+        target.textContent = text;
+        window.setTimeout(tick, 1300);
+        return;
+      }
+    } else {
+      index -= 1;
+
+      if (index <= 1) {
+        index = 1;
+        direction = 1;
+        target.textContent = text.slice(0, index);
+        window.setTimeout(tick, 260);
+        return;
+      }
+    }
+
+    target.textContent = text.slice(0, index);
+    window.setTimeout(tick, direction > 0 ? 85 : 42);
+  }
+
+  window.setTimeout(tick, 180);
+}
+
 function parseBrazilianPrice(value) {
   const normalized = String(value)
     .replace(/[^\d,.-]/g, "")
@@ -2133,6 +2176,7 @@ elements.tabButtons.forEach(function (button) {
 
 syncTopInputs();
 renderStaticIcons();
+startFooterTypewriter();
 renderAll();
 switchScreen("summaryScreen");
 

@@ -2669,3 +2669,63 @@ h1 {
     width: min(170px, 100%);
   }
 }
+
+/* Rodape com assinatura typewriter */
+.app-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 42px;
+  margin-top: 14px;
+  color: var(--palette-slate);
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.footer-avatar {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border: 2px solid rgba(14, 168, 137, 0.24);
+  border-radius: 50%;
+  box-shadow: 0 10px 22px rgba(15, 54, 84, 0.14);
+  object-fit: cover;
+}
+
+.footer-typewriter {
+  display: inline-block;
+  min-width: 1ch;
+  max-width: calc(100vw - 92px);
+  overflow: visible;
+  border-right: 2px solid var(--brand);
+  color: var(--ink);
+  line-height: 1.45;
+  white-space: nowrap;
+  animation: footerCaret 700ms step-end infinite;
+}
+
+@keyframes footerCaret {
+  0%,
+  100% {
+    border-color: transparent;
+  }
+
+  50% {
+    border-color: var(--brand);
+  }
+}
+
+@media (max-width: 430px) {
+  .app-footer {
+    gap: 8px;
+    font-size: 0.72rem;
+  }
+
+  .footer-avatar {
+    width: 30px;
+    height: 30px;
+  }
+}
