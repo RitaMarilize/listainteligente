@@ -4,14 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Lista de Mercado Inteligente</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=cabecalho-premium-1" />
   </head>
   <body>
     <div class="app-shell">
       <header class="topbar">
-        <div>
-          <p class="eyebrow">Lista de mercado</p>
-          <h1>Feira no limite certo</h1>
+        <div class="brand-wrap">
+          <span class="brand-icon icon-slot" data-icon="basket" aria-hidden="true"></span>
+          <h1>Lista de <span>Mercado</span></h1>
         </div>
         <div class="month-box">
           <label for="shoppingMonth">Mes da compra</label>
@@ -21,19 +21,19 @@
 
       <nav class="section-tabs" aria-label="Telas do app">
         <button class="tab-button active" type="button" data-screen-target="summaryScreen" aria-selected="true">
-          <span class="tab-icon summary-icon" aria-hidden="true"></span>
+          <span class="tab-icon summary-icon icon-slot" data-icon="bar-chart" aria-hidden="true"></span>
           Resumo
         </button>
         <button class="tab-button" type="button" data-screen-target="listScreen" aria-selected="false">
-          <span class="tab-icon list-icon" aria-hidden="true"></span>
+          <span class="tab-icon list-icon icon-slot" data-icon="list" aria-hidden="true"></span>
           Lista
         </button>
         <button class="tab-button" type="button" data-screen-target="productsScreen" aria-selected="false">
-          <span class="tab-icon product-icon" aria-hidden="true"></span>
+          <span class="tab-icon product-icon icon-slot" data-icon="package" aria-hidden="true"></span>
           Produtos
         </button>
         <button class="tab-button" type="button" data-screen-target="historyScreen" aria-selected="false">
-          <span class="tab-icon history-icon" aria-hidden="true"></span>
+          <span class="tab-icon history-icon icon-slot" data-icon="history" aria-hidden="true"></span>
           Historico
         </button>
       </nav>
@@ -47,20 +47,27 @@
                 <span>R$</span>
                 <input id="budgetInput" type="number" min="0" step="0.01" inputmode="decimal" />
               </div>
+              <div class="budget-pill" id="budgetPill">Dentro do saldo</div>
             </div>
 
             <div class="budget-summary">
               <div class="summary-item">
+                <span class="stat-icon icon-slot" data-icon="cart" aria-hidden="true"></span>
                 <span>Total da lista</span>
                 <strong id="totalSpent">R$ 0,00</strong>
+                <small id="totalSpentNote">0% do saldo</small>
               </div>
               <div class="summary-item">
+                <span class="stat-icon icon-slot" data-icon="wallet" aria-hidden="true"></span>
                 <span>Saldo restante</span>
                 <strong id="remainingBudget">R$ 0,00</strong>
+                <small id="remainingBudgetNote">0% do saldo</small>
               </div>
               <div class="summary-item">
+                <span class="stat-icon icon-slot" data-icon="bag" aria-hidden="true"></span>
                 <span>Itens</span>
                 <strong id="itemCount">0</strong>
+                <small id="itemCountNote">produtos na lista</small>
               </div>
               <div class="summary-item status-item" id="budgetStatus">Dentro do saldo</div>
             </div>
@@ -68,6 +75,7 @@
             <div class="progress-track" aria-hidden="true">
               <div class="progress-fill" id="budgetProgress"></div>
             </div>
+            <p class="progress-caption" id="budgetProgressCaption">0% do saldo utilizado</p>
           </section>
 
           <section class="tool-panel summary-panel" aria-labelledby="summaryTitle">
@@ -79,6 +87,20 @@
             </div>
             <div class="insight-grid" id="summaryHighlights"></div>
           </section>
+
+          <section class="quick-action-card" aria-label="Adicionar produto na lista">
+            <span class="quick-action-icon icon-slot" data-icon="basket" aria-hidden="true"></span>
+            <div>
+              <strong>Continue adicionando seus produtos</strong>
+              <p>Acompanhe seus gastos e mantenha tudo dentro do limite.</p>
+            </div>
+            <button class="primary-button" id="quickAddButton" type="button">
+              <span class="button-icon">+</span>
+              Adicionar item a lista
+            </button>
+          </section>
+
+          <footer class="app-footer"><span class="footer-lock icon-slot" data-icon="lock" aria-hidden="true"></span> Seus dados estao seguros e privados</footer>
         </section>
 
         <section class="app-screen" id="listScreen" hidden>

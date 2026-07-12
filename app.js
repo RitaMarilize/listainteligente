@@ -22,12 +22,18 @@ const elements = {
   month: document.querySelector("#shoppingMonth"),
   budget: document.querySelector("#budgetInput"),
   totalSpent: document.querySelector("#totalSpent"),
+  totalSpentNote: document.querySelector("#totalSpentNote"),
   remainingBudget: document.querySelector("#remainingBudget"),
+  remainingBudgetNote: document.querySelector("#remainingBudgetNote"),
   itemCount: document.querySelector("#itemCount"),
+  itemCountNote: document.querySelector("#itemCountNote"),
   summaryTitle: document.querySelector("#summaryTitle"),
   historyTitle: document.querySelector("#historyTitle"),
   budgetStatus: document.querySelector("#budgetStatus"),
   budgetProgress: document.querySelector("#budgetProgress"),
+  budgetPill: document.querySelector("#budgetPill"),
+  budgetProgressCaption: document.querySelector("#budgetProgressCaption"),
+  quickAddButton: document.querySelector("#quickAddButton"),
   productForm: document.querySelector("#productForm"),
   editingProductId: document.querySelector("#editingProductId"),
   productName: document.querySelector("#productName"),
@@ -253,6 +259,39 @@ function escapeHtml(value) {
 
   return String(value).replace(/[&<>"']/g, function (char) {
     return map[char];
+  });
+}
+
+function getIconSvg(name) {
+  const icons = {
+    basket: '<path d="M5 11h14l-1.2 8.2a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8L5 11Z"></path><path d="M8.5 11 12 4l3.5 7"></path><path d="M9 15v2.5"></path><path d="M12 15v2.5"></path><path d="M15 15v2.5"></path>',
+    "bar-chart": '<path d="M4 19V5"></path><path d="M4 19h16"></path><path d="M8 16v-5"></path><path d="M12 16V8"></path><path d="M16 16v-7"></path>',
+    list: '<path d="M8 6h12"></path><path d="M8 12h12"></path><path d="M8 18h12"></path><path d="M4 6h.01"></path><path d="M4 12h.01"></path><path d="M4 18h.01"></path>',
+    package: '<path d="m21 16-9 5-9-5V8l9-5 9 5v8Z"></path><path d="m3.3 7.5 8.7 5 8.7-5"></path><path d="M12 22V12"></path>',
+    history: '<path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v6h6"></path><path d="M12 7v5l3 2"></path>',
+    cart: '<path d="M6 6h15l-2 8H8L6 3H3"></path><circle cx="9" cy="20" r="1.4"></circle><circle cx="18" cy="20" r="1.4"></circle>',
+    wallet: '<path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18a2 2 0 0 1 2 2v12H6.5A2.5 2.5 0 0 1 4 16.5v-9Z"></path><path d="M4 8h16"></path><path d="M15 13h5v4h-5a2 2 0 0 1 0-4Z"></path><path d="M17 15h.01"></path>',
+    bag: '<path d="M6 8h12l-1 12H7L6 8Z"></path><path d="M9 8a3 3 0 0 1 6 0"></path>',
+    "check-circle": '<circle cx="12" cy="12" r="9"></circle><path d="m8 12.5 2.5 2.5L16 9"></path>',
+    "alert-circle": '<circle cx="12" cy="12" r="9"></circle><path d="M12 7v6"></path><path d="M12 17h.01"></path>',
+    "x-circle": '<circle cx="12" cy="12" r="9"></circle><path d="m9 9 6 6"></path><path d="m15 9-6 6"></path>',
+    calendar: '<rect x="4" y="5" width="16" height="15" rx="3"></rect><path d="M8 3v4"></path><path d="M16 3v4"></path><path d="M4 10h16"></path>',
+    percent: '<path d="m19 5-14 14"></path><circle cx="7.5" cy="7.5" r="2"></circle><circle cx="16.5" cy="16.5" r="2"></circle>',
+    "trend-up": '<path d="m4 16 5-5 4 4 7-8"></path><path d="M15 7h5v5"></path>',
+    "trend-down": '<path d="m4 8 5 5 4-4 7 8"></path><path d="M15 17h5v-5"></path>',
+    lock: '<rect x="5" y="10" width="14" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path>',
+  };
+
+  return (
+    '<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+    (icons[name] || "") +
+    "</svg>"
+  );
+}
+
+function renderStaticIcons() {
+  document.querySelectorAll(".icon-slot[data-icon]").forEach(function (slot) {
+    slot.innerHTML = getIconSvg(slot.dataset.icon);
   });
 }
 
@@ -1277,27 +1316,39 @@ function renderBudget() {
   const totals = calculateTotals();
   const remaining = state.budget - totals.total;
   const usedPercent = state.budget > 0 ? (totals.total / state.budget) * 100 : 0;
+  const remainingPercent = state.budget > 0 ? Math.max((remaining / state.budget) * 100, 0) : 0;
   const progressWidth = Math.min(usedPercent, 100);
 
   elements.totalSpent.textContent = formatMoney(totals.total);
+  elements.totalSpentNote.textContent = percentFormatter.format(Math.max(usedPercent, 0)) + "% do saldo";
   elements.remainingBudget.textContent = formatMoney(remaining);
+  elements.remainingBudgetNote.textContent = percentFormatter.format(remainingPercent) + "% do saldo";
   elements.itemCount.textContent = totals.rows;
+  elements.itemCountNote.textContent = totals.rows === 1 ? "produto na lista" : "produtos na lista";
   elements.budgetProgress.style.width = progressWidth + "%";
+  elements.budgetProgressCaption.textContent = percentFormatter.format(usedPercent) + "% do saldo utilizado";
 
   elements.budgetStatus.classList.remove("status-ok", "status-warning", "status-over");
+  elements.budgetPill.classList.remove("status-ok", "status-warning", "status-over");
 
   if (remaining < 0) {
-    elements.budgetStatus.textContent = "Passou " + formatMoney(Math.abs(remaining));
+    elements.budgetStatus.innerHTML = '<span class="stat-icon status-visual">' + getIconSvg("x-circle") + '</span><span class="status-label">Situacao atual</span><strong>Acima do saldo</strong><small>Passou ' + formatMoney(Math.abs(remaining)) + '</small>';
+    elements.budgetPill.textContent = "Acima do saldo";
     elements.budgetStatus.classList.add("status-over");
-    elements.budgetProgress.style.backgroundColor = "var(--danger)";
+    elements.budgetPill.classList.add("status-over");
+    elements.budgetProgress.style.background = "linear-gradient(90deg, #ff9aa4, var(--danger))";
   } else if (state.budget > 0 && remaining <= state.budget * 0.15) {
-    elements.budgetStatus.textContent = "Perto do limite";
+    elements.budgetStatus.innerHTML = '<span class="stat-icon status-visual">' + getIconSvg("alert-circle") + '</span><span class="status-label">Situacao atual</span><strong>Perto do limite</strong>';
+    elements.budgetPill.textContent = "Perto do limite";
     elements.budgetStatus.classList.add("status-warning");
-    elements.budgetProgress.style.backgroundColor = "var(--warning)";
+    elements.budgetPill.classList.add("status-warning");
+    elements.budgetProgress.style.background = "linear-gradient(90deg, #ffe3a3, var(--warning))";
   } else {
-    elements.budgetStatus.textContent = "Dentro do saldo";
+    elements.budgetStatus.innerHTML = '<span class="stat-icon status-visual">' + getIconSvg("check-circle") + '</span><span class="status-label">Situacao atual</span><strong>Dentro do saldo</strong><small>Tudo certo!</small>';
+    elements.budgetPill.textContent = "Dentro do saldo";
     elements.budgetStatus.classList.add("status-ok");
-    elements.budgetProgress.style.backgroundColor = "var(--success)";
+    elements.budgetPill.classList.add("status-ok");
+    elements.budgetProgress.style.background = "linear-gradient(90deg, #6be1a4, #19c795)";
   }
 }
 
@@ -1668,30 +1719,31 @@ function renderSummaryHighlights() {
       return a.trend.difference - b.trend.difference;
     })[0];
 
-  const remaining = state.budget - totals.total;
-  const statusText = remaining < 0 ? "Acima do saldo" : state.budget > 0 && remaining <= state.budget * 0.15 ? "Perto do limite" : "Dentro do saldo";
-
   if (elements.summaryTitle) {
     elements.summaryTitle.textContent = "Resumo de " + monthLabel;
   }
 
   elements.summaryHighlights.innerHTML = [
     '<article class="insight-card">',
+    '<span class="insight-icon">' + getIconSvg("calendar") + '</span>',
     '<span class="insight-label">Mes selecionado</span>',
     '<strong>' + escapeHtml(monthLabel) + '</strong>',
     '<p class="insight-meta">Baseado no calendario acima</p>',
     '</article>',
     '<article class="insight-card">',
+    '<span class="insight-icon">' + getIconSvg("percent") + '</span>',
     '<span class="insight-label">Uso do saldo</span>',
     '<strong>' + percentFormatter.format(usedPercent) + '%</strong>',
     '<p class="insight-meta">' + formatMoney(totals.total) + ' de ' + formatMoney(state.budget) + '</p>',
     '</article>',
     '<article class="insight-card insight-up">',
+    '<span class="insight-icon">' + getIconSvg("trend-up") + '</span>',
     '<span class="insight-label">Maior alta no mes</span>',
     '<strong>' + escapeHtml(biggestUp ? biggestUp.product.name : 'Sem alta') + '</strong>',
     '<p class="insight-meta">' + escapeHtml(biggestUp ? biggestUp.trend.label : 'Nenhum produto subiu ate esse mes') + '</p>',
     '</article>',
     '<article class="insight-card insight-down">',
+    '<span class="insight-icon">' + getIconSvg("trend-down") + '</span>',
     '<span class="insight-label">Maior baixa no mes</span>',
     '<strong>' + escapeHtml(biggestDown ? biggestDown.product.name : 'Sem baixa') + '</strong>',
     '<p class="insight-meta">' + escapeHtml(biggestDown ? biggestDown.trend.label : 'Nenhum produto baixou ate esse mes') + '</p>',
@@ -2067,6 +2119,12 @@ elements.catalogList.addEventListener("click", function (event) {
 elements.search.addEventListener("input", renderCatalog);
 elements.categoryFilter.addEventListener("change", renderCatalog);
 
+if (elements.quickAddButton) {
+  elements.quickAddButton.addEventListener("click", function () {
+    switchScreen("listScreen");
+  });
+}
+
 elements.tabButtons.forEach(function (button) {
   button.addEventListener("click", function () {
     switchScreen(button.dataset.screenTarget);
@@ -2074,6 +2132,7 @@ elements.tabButtons.forEach(function (button) {
 });
 
 syncTopInputs();
+renderStaticIcons();
 renderAll();
 switchScreen("summaryScreen");
 
